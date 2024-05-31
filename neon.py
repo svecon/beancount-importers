@@ -1,6 +1,5 @@
 import csv
-import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from beancount.core.data import Transaction
 from beancount.core.data import Posting
@@ -17,10 +16,10 @@ class InvalidFormatError(Exception):
 
 
 def fmt_number_de(value: str) -> Decimal:
-    thousands_sep = '.'
-    decimal_sep = ','
+    thousands_sep = "."
+    decimal_sep = ","
 
-    return Decimal(value.replace(thousands_sep, '').replace(decimal_sep, '.'))
+    return Decimal(value.replace(thousands_sep, "").replace(decimal_sep, "."))
 
 
 def DecimalOrZero(value):
@@ -32,33 +31,26 @@ def DecimalOrZero(value):
 
 
 class NeonImporter(importer.ImporterProtocol):
-    def __init__(self,
-                 account,
-                 currency='CHF',
-                 file_encoding='utf-8',
-                 manual_fixes=0):
+    def __init__(self, account, currency="CHF", file_encoding="utf-8", manual_fixes=0):
 
         self.account = account
         self.currency = currency
         self.file_encoding = file_encoding
-        self.language = ''
+        self.language = ""
 
         self._date_from = None
         self._date_to = None
         self._balance_amount = None
         self._balance_date = None
-        self.delimiter = ';'
+        self.delimiter = ";"
         self.manual_fixes = manual_fixes
 
         self.tags = {
-            'Saldovortrag': {
-                'EN': 'Balance brought forward',
-                'DE': 'Saldovortrag'
-            }
+            "Saldovortrag": {"EN": "Balance brought forward", "DE": "Saldovortrag"}
         }
 
     def name(self):
-        return 'PFCC {}'.format(self.__class__.__name__)
+        return "Neon {}".format(self.__class__.__name__)
 
     def file_account(self, _):
         return self.account
@@ -67,7 +59,7 @@ class NeonImporter(importer.ImporterProtocol):
         return datetime.now
 
     def identify(self, file_):
-        return 'neon' in file_.name
+        return "neon" in file_.name
 
     def extract(self, file_, existing_entries=None):
         entries = []
@@ -75,7 +67,11 @@ class NeonImporter(importer.ImporterProtocol):
 
             reader = csv.reader(fd, delimiter=self.delimiter)
 
-            next(reader)  # skip header line
+            header = next(reader)  # skip header line
+            amount_index = header.index("Amount")
+            date_index = header.index("Date")
+            category_index = header.index("Category")
+            description_index = header.index("Description")
 
             # Data entries
             for i, row in enumerate(reader):
@@ -83,17 +79,28 @@ class NeonImporter(importer.ImporterProtocol):
                     break
 
                 meta = data.new_metadata(file_.name, i)
-                date = datetime.strptime(row[0], '%Y-%m-%d').date()
-                amount = Amount(DecimalOrZero(row[1]), self.currency)
-                description = row[2]
+                date = datetime.strptime(row[date_index], "%Y-%m-%d").date()
+                amount = Amount(DecimalOrZero(row[amount_index]), self.currency)
+                description = row[description_index]
+                metadata = {"category": row[category_index]}
 
-                trans = Transaction(meta, date, self.FLAG, '', description,
-                                    data.EMPTY_SET, data.EMPTY_SET, [])
+                trans = Transaction(
+                    meta,
+                    date,
+                    self.FLAG,
+                    "",
+                    description,
+                    data.EMPTY_SET,
+                    data.EMPTY_SET,
+                    [],
+                )
 
                 trans.postings.append(
-                    Posting(self.account, amount, None, None, None, None))
+                    Posting(self.account, amount, None, None, None, None)
+                )
                 trans.postings.append(
-                    Posting("Expenses:TBD", -amount, None, None, None, None))
+                    Posting("Expenses:TBD", -amount, None, None, None, metadata)
+                )
 
                 entries.append(trans)
 
