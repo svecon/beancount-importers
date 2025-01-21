@@ -10,8 +10,8 @@ from beancount.core.number import D
 import csv
 
 
-class RevolutImporter(importer.ImporterProtocol):
-    """An importer for Revolut CSV files."""
+class WiseImporter(importer.ImporterProtocol):
+    """An importer for Wise CSV files."""
 
     def __init__(self, account, currency="CHF", file_encoding="utf-8", manual_fixes=0):
 
@@ -21,7 +21,7 @@ class RevolutImporter(importer.ImporterProtocol):
         self.language = ""
 
     def name(self):
-        return "Revolut {}".format(self.__class__.__name__)
+        return "Wise {}".format(self.__class__.__name__)
 
     def file_account(self, file):
         return self.account
@@ -30,26 +30,35 @@ class RevolutImporter(importer.ImporterProtocol):
         return datetime.now
 
     def identify(self, file):
-        return "revolut" in file.name
+        return "wise" in file.name
 
     def extract(self, file, existing_entries):
         entries = []
-        has_balance = False
 
         with StringIO(file.contents()) as csvfile:
             reader = csv.DictReader(
                 csvfile,
                 [
-                    "Type",
-                    "Product",
-                    "Started Date",
-                    "Completed Date",
-                    "Description",
+                    "TransferWise ID",
+                    "Date",
                     "Amount",
-                    "Fee",
                     "Currency",
-                    "State",
-                    "Balance",
+                    "Description",
+                    "Payment Reference",
+                    "Running Balance",
+                    "Exchange From",
+                    "Exchange To",
+                    "Exchange Rate",
+                    "Payer Name",
+                    "Payee Name",
+                    "Payee Account Number",
+                    "Merchant",
+                    "Card Last Four Digits",
+                    "Card Holder Full Name",
+                    "Attachment",
+                    "Note",
+                    "Total fees",
+                    "Exchange To Amount",
                 ],
                 delimiter=",",
                 skipinitialspace=True,
@@ -57,24 +66,28 @@ class RevolutImporter(importer.ImporterProtocol):
             next(reader)
             for row in reader:
 
-                if row["State"] != "COMPLETED":
-                    continue
-
-                book_date = parse(row["Started Date"].split()[0].strip()).date()
+                book_date = parse(row["Date"]).date()
 
                 amt = amount.Amount(D(row["Amount"]), row["Currency"])
+                description = row["Description"].strip()
+                if "issued by" in description:
+                    description = description.split("issued by")[1].strip()
 
                 meta = data.new_metadata(
                     file.name,
                     0,
-                    {"balance": data.Amount(D(row["Balance"]), row["Currency"])},
+                    {
+                        "balance": data.Amount(
+                            D(row["Running Balance"]), row["Currency"]
+                        )
+                    },
                 )
                 entry = data.Transaction(
                     meta,
                     book_date,
                     "*",
                     "",
-                    row["Description"].strip(),
+                    description,
                     data.EMPTY_SET,
                     data.EMPTY_SET,
                     [
@@ -89,8 +102,18 @@ class RevolutImporter(importer.ImporterProtocol):
                         ),
                     ],
                 )
-                if D(row["Fee"]) != 0:
-                    fee = amount.Amount(D(row["Fee"]), row["Currency"])
+                if D(row["Total fees"]) != 0:
+                    fee = amount.Amount(D(row["Total fees"]), row["Currency"])
+                    entry.postings.append(
+                        data.Posting(
+                            self.account,
+                            -fee,
+                            None,
+                            None,
+                            None,
+                            None,
+                        )
+                    )
                     entry.postings.append(
                         data.Posting(
                             "Expenses:Financial:Fees",

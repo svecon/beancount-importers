@@ -52,18 +52,18 @@ class NeonImporter(importer.ImporterProtocol):
     def name(self):
         return "Neon {}".format(self.__class__.__name__)
 
-    def file_account(self, _):
+    def file_account(self, file):
         return self.account
 
-    def file_date(self, file_):
+    def file_date(self, file):
         return datetime.now
 
-    def identify(self, file_):
-        return "neon" in file_.name
+    def identify(self, file):
+        return "neon" in file.name
 
-    def extract(self, file_, existing_entries=None):
+    def extract(self, file, existing_entries=None):
         entries = []
-        with open(file_.name, encoding=self.file_encoding) as fd:
+        with open(file.name, encoding=self.file_encoding) as fd:
 
             reader = csv.reader(fd, delimiter=self.delimiter)
 
@@ -78,7 +78,7 @@ class NeonImporter(importer.ImporterProtocol):
                 if len(row) == 0:  # "end" of bank statment
                     break
 
-                meta = data.new_metadata(file_.name, i)
+                meta = data.new_metadata(file.name, i)
                 date = datetime.strptime(row[date_index], "%Y-%m-%d").date()
                 amount = Amount(DecimalOrZero(row[amount_index]), self.currency)
                 description = row[description_index]
@@ -94,14 +94,12 @@ class NeonImporter(importer.ImporterProtocol):
                     data.EMPTY_SET,
                     [],
                 )
-
                 trans.postings.append(
                     Posting(self.account, amount, None, None, None, None)
                 )
                 trans.postings.append(
-                    Posting("Expenses:TBD", -amount, None, None, None, metadata)
+                    Posting("Expenses:TBD", -amount, None, None, None, None)
                 )
-
                 entries.append(trans)
 
         return entries
