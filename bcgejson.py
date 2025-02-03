@@ -10,6 +10,7 @@ from beancount.ingest import importer
 from beancount.core.number import Decimal
 
 
+# https://www.bcge.ch/next/api/v3/accounts/.../transactions/2025/01
 class BcgeImporter(importer.ImporterProtocol):
     def __init__(self, account, currency="CHF", file_encoding="utf-8", manual_fixes=0):
 
